@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>GearGen 3D Pro - Modellatore Ingranaggi</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GearGen 3D">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%232563eb'/><circle cx='50' cy='50' r='30' fill='%231a1a1f'/></svg>">
+<link rel="manifest" href="data:application/manifest+json,{%22name%22:%22GearGen%203D%20Pro%22,%22short_name%22:%22GearGen3D%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%231a1a1f%22,%22theme_color%22:%22%232563eb%22}">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{width:100vw;height:100vh;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#1a1a1f;color:#eaeaea;user-select:none}
+#canvas-container{width:100%;height:100%;position:absolute;top:0;left:0;z-index:1}
+#sidebar{position:absolute;top:0;left:0;height:100%;width:340px;min-width:280px;max-width:550px;background:rgba(26,26,32,.95);backdrop-filter:blur(12px);border-right:1px solid #33333d;z-index:10;display:flex;flex-direction:column;transition:transform .3s ease;box-shadow:6px 0 24px rgba(0,0,0,.4)}
+#sidebar.collapsed{transform:translateX(-100%)}
+.sidebar-header{padding:16px;background:#111115;border-bottom:1px solid #2a2a32;display:flex;flex-direction:column;gap:10px}
+.toolbar{display:flex;gap:8px}
+.action-btn{flex:1;background:#2a2a35;color:#fff;border:1px solid #374151;padding:8px;border-radius:6px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;transition:.2s}
+.action-btn:hover:not(:disabled){background:#374151;border-color:#4b5563}
+.action-btn:disabled{opacity:.35;cursor:not-allowed}
+.export-btn{width:100%;background:#2563eb;color:#fff;border:none;padding:12px;border-radius:8px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:.2s;font-size:14px}
+.export-btn:hover{background:#1d4ed8}
+#toggle-btn{position:absolute;right:-40px;top:16px;width:40px;height:40px;background:#111115;border:1px solid #2a2a32;border-left:none;color:#fff;border-radius:0 8px 8px 0;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:4px 0 10px rgba(0,0,0,.3);font-size:16px}
+.sidebar-content{padding:20px 16px;overflow-y:auto;flex:1}
+.sidebar-content h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:20px 0 15px 0;padding-bottom:5px;border-bottom:1px solid #333}
+.sidebar-content h2:first-child{margin-top:0}
+.control-group{margin-bottom:18px}
+.control-group label{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#d1d5db;margin-bottom:8px;font-weight:500}
+input[type=range]{width:100%;height:8px;border-radius:4px;background:#374151;outline:none;accent-color:#2563eb;cursor:pointer}
+input[type=text],select{width:100%;padding:10px;background:#111115;color:#fff;border:1px solid #374151;border-radius:6px;outline:none;font-size:13px;margin-bottom:10px;user-select:text;-webkit-user-select:text}
+input[type=text]:focus,select:focus{border-color:#2563eb}
+.inline-input{background:rgba(255,255,255,.08);border:1px solid #374151;color:#60a5fa;font-weight:600;font-size:13px;text-align:right;outline:none;cursor:text;border-radius:4px;padding:4px 6px;width:60px;transition:all .2s;user-select:text!important;-webkit-user-select:text!important;pointer-events:auto!important}
+.inline-input:hover{border-color:#6b7280;background:#111115}
+.inline-input:focus{border-color:#2563eb;background:#111115;color:#fff;box-shadow:0 0 0 2px rgba(37,99,235,.3)}
+.inline-input::-webkit-outer-spin-button,.inline-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.inline-input[type=number]{-moz-appearance:textfield}
+.checkbox-group{display:flex;align-items:center;gap:10px;cursor:pointer;background:rgba(255,255,255,.04);padding:12px;border-radius:6px;border:1px solid #2a2a32;margin-bottom:15px}
+.checkbox-group input{width:18px;height:18px;accent-color:#2563eb;cursor:pointer}
+#resize-handle{position:absolute;top:0;right:0;width:6px;height:100%;cursor:ew-resize;transition:background .2s}
+#resize-handle:hover,#resize-handle.active{background:#2563eb}
+.hidden{display:none!important}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+<div id="canvas-container"></div>
+<div id="sidebar">
+<button id="toggle-btn">◀</button>
+<div class="sidebar-header">
+<div class="toolbar">
+<button id="undo-btn" class="action-btn" disabled title="Torna indietro"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg> Annulla</button>
+<button id="redo-btn" class="action-btn" disabled title="Torna avanti"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/></svg> Ripristina</button>
+</div>
+<button id="export-btn" class="export-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Esporta in STL<span id="export-unit"> (mm)</span></button>
+</div>
+<div class="sidebar-content">
+<h2>Impostazioni Generali</h2>
+<div class="control-group"><label>Nome Progetto:</label><input type="text" id="project-name" value="Ingranaggio_3D" placeholder="Inserisci nome file..."></div>
+<div class="control-group"><select id="unit-system"><option value="mm">Scala: Millimetri (mm)</option><option value="cm">Scala: Centimetri (cm)</option></select></div>
+<h2>Dimensionamento</h2>
+<div class="control-group"><select id="calc-mode"><option value="module">Metodo: Modulo Meccanico (M)</option><option value="diameter">Metodo: Diametro Esterno</option></select></div>
+<div class="control-group"><label>Numero Denti (Z): <input type="number" id="num-teeth-val" class="inline-input" value="20" min="6" max="120" step="1"></label><input type="range" id="num-teeth" min="6" max="120" value="20" step="1"></div>
+<div class="control-group" id="group-module"><label>Modulo (M, sempre in mm): <input type="number" id="gear-module-val" class="inline-input" value="2.0" min="0.5" max="10" step="0.1"></label><input type="range" id="gear-module" min="0.5" max="10" value="2.0" step="0.1"></div>
+<div class="control-group hidden" id="group-diameter"><label>Diametro Esterno <span class="unit-lbl">(mm)</span>: <input type="number" id="outer-diameter-val" class="inline-input" value="44.0" min="15" max="200" step="0.5"></label><input type="range" id="outer-diameter" min="15" max="200" value="44" step="0.5"></div>
+<div class="control-group"><label>Spessore <span class="unit-lbl">(mm)</span>: <input type="number" id="gear-thickness-val" class="inline-input" value="10" min="2" max="100" step="1"></label><input type="range" id="gear-thickness" min="2" max="100" value="10" step="1"></div>
+<h2>Geometria Denti</h2>
+<div class="control-group"><select id="profile-type"><option value="involute" selected>Profilo: Evolvente 20° (ingrana)</option><option value="trapezoid">Profilo: Trapezoidale (semplice)</option></select></div>
+<div class="control-group"><select id="tooth-type"><option value="straight" selected>Denti Diritti (Standard)</option><option value="helical">Denti Elicoidali</option><option value="herringbone">A Spina di Pesce (Herringbone)</option></select></div>
+<div class="control-group hidden" id="group-helix-angle"><label>Angolo Elica (°): <input type="number" id="helix-angle-val" class="inline-input" value="15" min="-45" max="45" step="1"></label><input type="range" id="helix-angle" min="-45" max="45" value="15" step="1"></div>
+<div class="control-group hidden" id="group-tooth-tip"><label>Larghezza Cresta (%): <input type="number" id="tooth-tip-val" class="inline-input" value="30" min="10" max="50" step="1"></label><input type="range" id="tooth-tip" min="10" max="50" value="30" step="1"></div>
+<div class="control-group"><label>Altezza Denti (%): <input type="number" id="tooth-height-val" class="inline-input" value="100" min="50" max="150" step="1"></label><input type="range" id="tooth-height" min="50" max="150" value="100" step="1"></div>
+<div class="control-group"><label>Arrotondamento Cresta (%): <input type="number" id="tooth-rounding-val" class="inline-input" value="0" min="0" max="100" step="1"></label><input type="range" id="tooth-rounding" min="0" max="100" value="0" step="1"></div>
+<h2>Profilo Interno & Alleggerimento</h2>
+<div class="control-group"><select id="hole-type"><option value="none">Nessun Foro</option><option value="round" selected>Foro Tondo Standard</option><option value="lego">Foro a Croce (Assale LEGO)</option><option value="d-cut">Foro a D (Motori Passo-Passo)</option><option value="keyway">Sede per Chiavetta</option></select></div>
+<div class="control-group" id="group-hole-diameter"><label>Diametro Foro <span class="unit-lbl">(mm)</span>: <input type="number" id="hole-diameter-val" class="inline-input" value="5.0" min="1" max="50" step="0.1"></label><input type="range" id="hole-diameter" min="1" max="50" value="5.0" step="0.1"></div>
+<div class="checkbox-group" id="group-lightening"><input type="checkbox" id="add-lightening" checked><label for="add-lightening">Attiva Fori Alleggerimento (Razze)</label></div>
+<div class="control-group" id="group-lightening-size"><label>Dimensione Razze (%): <input type="number" id="lightening-size-val" class="inline-input" value="60" min="10" max="95" step="1"></label><input type="range" id="lightening-size" min="10" max="95" value="60" step="1"></div>
+</div>
+<div id="resize-handle"></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x1e1e24);
+const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.1,1000);camera.position.set(0,80,120);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;
+$('canvas-container').appendChild(renderer.domElement);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=0.05;controls.maxPolarAngle=Math.PI/2+0.05;
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+const dirLight=new THREE.DirectionalLight(0xffffff,0.85);dirLight.position.set(80,120,80);dirLight.castShadow=true;scene.add(dirLight);
+scene.add(new THREE.GridHelper(300,60,0x00d1b2,0x333342));
+const material=new THREE.MeshStandardMaterial({color:0xff5522,roughness:0.35,metalness:0.1});
+let currentMesh=null,isCM=false;
+const PRESSURE_ANGLE=20*Math.PI/180; // angolo di pressione standard, radianti
+const UNIT_IDS=['outer-diameter','gear-thickness','hole-diameter'];
+
+// Il modello è sempre costruito in mm e a schermo non cambia mai dimensione: "cm" cambia solo i numeri mostrati e l'unità dell'STL. k = mm per unità mostrata.
+const unitK=()=>isCM?10:1;
+function applyUnitAttrs(){
+  const f=isCM?0.1:1;
+  document.querySelectorAll('.unit-lbl').forEach(l=>l.textContent=isCM?'(cm)':'(mm)');
+  $('export-unit').textContent=isCM?' (cm)':' (mm)';
+  UNIT_IDS.forEach(id=>[id,id+'-val'].forEach(i=>{const e=$(i);['min','max','step'].forEach(p=>{if(!e.dataset[p])e.dataset[p]=e[p];e[p]=(e.dataset[p]*f).toFixed(2);});}));
+}
+
+// --- ANNULLA / RIPRISTINA ---
+let historyStack=[],historyIndex=-1,isRestoringState=false;
+const STATE_IDS=['project-name','unit-system','calc-mode','num-teeth','gear-module','outer-diameter','gear-thickness','profile-type','tooth-type','helix-angle','tooth-tip','tooth-height','tooth-rounding','hole-type','hole-diameter','lightening-size'];
+function getAppState(){const s={};STATE_IDS.forEach(id=>s[id]=$(id).value);s.addLightening=$('add-lightening').checked;return s;}
+function saveState(){
+  if(isRestoringState)return;
+  const cur=getAppState();
+  if(historyIndex>=0&&JSON.stringify(historyStack[historyIndex])===JSON.stringify(cur))return;
+  historyStack=historyStack.slice(0,historyIndex+1);historyStack.push(cur);historyIndex=historyStack.length-1;updateUndoRedoUI();
+}
+function applyAppState(s){
+  isRestoringState=true;
+  isCM=s['unit-system']==='cm';applyUnitAttrs(); // ripristina anche unità, limiti e etichette
+  STATE_IDS.forEach(id=>{$(id).value=s[id];const v=$(id+'-val');if(v)v.value=s[id];});
+  $('add-lightening').checked=s.addLightening;
+  syncUIElements();generateGear();isRestoringState=false;updateUndoRedoUI();
+}
+function undo(){if(historyIndex>0){historyIndex--;applyAppState(historyStack[historyIndex]);}}
+function redo(){if(historyIndex<historyStack.length-1){historyIndex++;applyAppState(historyStack[historyIndex]);}}
+function updateUndoRedoUI(){$('undo-btn').disabled=historyIndex<=0;$('redo-btn').disabled=historyIndex>=historyStack.length-1;}
+function syncUIElements(){
+  const cm=$('calc-mode').value;
+  $('group-module').classList.toggle('hidden',cm!=='module');
+  $('group-diameter').classList.toggle('hidden',cm!=='diameter');
+  $('group-helix-angle').classList.toggle('hidden',$('tooth-type').value==='straight');
+  $('group-tooth-tip').classList.toggle('hidden',$('profile-type').value==='involute');
+  $('group-hole-diameter').classList.toggle('hidden',$('hole-type').value==='none');
+  $('group-lightening-size').classList.toggle('hidden',!$('add-lightening').checked);
+}
+
+// --- SAGOMA 2D --- (tutte le lunghezze in mm)
+// Raccordo dell'angolo P[i] con una Bezier quadratica: taglia dBack all'indietro e dFwd in avanti lungo la polilinea.
+function roundCorner(P,i,dBack,dFwd){
+  const walk=(dir,d)=>{let j=i,rem=d;for(;;){const a=P[j],b=P[j+dir],L=Math.hypot(b[0]-a[0],b[1]-a[1]);if(rem<=L)return{j,p:[a[0]+(b[0]-a[0])*rem/L,a[1]+(b[1]-a[1])*rem/L]};rem-=L;j+=dir;if(!P[j+dir])return{j,p:P[j]};}};
+  const B=walk(-1,dBack),F=walk(1,dFwd),c=P[i],arc=[];
+  for(let k=0;k<=6;k++){const t=k/6,u=1-t;arc.push([u*u*B.p[0]+2*u*t*c[0]+t*t*F.p[0],u*u*B.p[1]+2*u*t*c[1]+t*t*F.p[1]]);}
+  P.splice(B.j,F.j-B.j+1,...arc);
+}
+function createGearShape(Z,m,baseR,tipR,pt,th,tr,holeType,r1,addLightening,lighteningSize,profile){
+  const shape=new THREE.Shape(),step=2*Math.PI/Z,tooth=[];let c1; // tooth = un dente, centrato sull'angolo 0
+  const pol=(r,t)=>[r*Math.cos(t),r*Math.sin(t)];
+  if(profile==='involute'){
+    // Evolvente del cerchio base: a raggio r il semi-dente angolare vale
+    // pi/(2Z) + inv(alfa) - inv(phi_r), con phi_r=acos(rb/r), inv(x)=tan(x)-x (senza gioco)
+    const R=m*Z/2,rb=R*Math.cos(PRESSURE_ANGLE),inv=x=>Math.tan(x)-x;
+    const half=r=>Math.max(0,Math.PI/(2*Z)+inv(PRESSURE_ANGLE)-inv(Math.acos(Math.min(1,rb/r))));
+    const r0=Math.max(baseR,rb),rt=Math.max(tipR,r0+0.05*m),flank=[];
+    if(baseR<rb)flank.push([baseR,half(rb)]); // sotto il cerchio base il fianco è radiale
+    for(let k=0;k<=8;k++){const r=r0+(rt-r0)*k/8;flank.push([r,half(r)]);}
+    const rs=r=>baseR+(r-baseR)*th; // altezza denti: scala radiale del dente intero (non lo taglia)
+    flank.forEach(([r,t])=>tooth.push(pol(rs(r),-t)));
+    flank.slice().reverse().forEach(([r,t])=>tooth.push(pol(rs(r),t)));
+    c1=flank.length-1; // indice dello spigolo di cresta sinistro
+  }else{
+    const tA=step*pt,bA=step-tA,tRad=baseR+(tipR-baseR)*th;
+    tooth.push(pol(baseR,-bA/2),pol(tRad,-tA/2),pol(tRad,tA/2),pol(baseR,bA/2));c1=1;
+  }
+  if(tr>0){ // arrotondamento solo in pianta sui due spigoli di cresta: niente smusso sopra/sotto, fori intatti
+    const p=tooth[c1],q=tooth[c1+1],chord=Math.hypot(p[0]-q[0],p[1]-q[1]);
+    if(chord>1e-6){
+      let L=0;for(let k=1;k<=c1;k++)L+=Math.hypot(tooth[k][0]-tooth[k-1][0],tooth[k][1]-tooth[k-1][1]);
+      const dC=tr/100*chord/2,dF=Math.min(2*dC,L/2);
+      roundCorner(tooth,c1+1,dC,dF);roundCorner(tooth,c1,dF,dC);
+    }
+  }
+  for(let i=0;i<Z;i++){
+    const a=i*step,ca=Math.cos(a),sa=Math.sin(a);
+    tooth.forEach(([x,y],j)=>{const X=x*ca-y*sa,Y=x*sa+y*ca;(i===0&&j===0)?shape.moveTo(X,Y):shape.lineTo(X,Y);});
+  }
+  if(holeType!=='none'&&r1>0){
+    const hole=new THREE.Path();
+    if(holeType==='round')hole.absarc(0,0,r1,0,Math.PI*2,false);
+    else if(holeType==='lego'){
+      const s=r1,w=r1*0.4;
+      hole.moveTo(w,s);hole.lineTo(-w,s);hole.lineTo(-w,w);hole.lineTo(-s,w);hole.lineTo(-s,-w);hole.lineTo(-w,-w);hole.lineTo(-w,-s);hole.lineTo(w,-s);hole.lineTo(w,-w);hole.lineTo(s,-w);hole.lineTo(s,w);hole.lineTo(w,w);
+    }else if(holeType==='d-cut'){
+      const flatOffset=r1*0.55,startAngle=Math.acos(flatOffset/r1);
+      hole.absarc(0,0,r1,startAngle,Math.PI*2-startAngle,false);hole.lineTo(flatOffset,r1*Math.sin(startAngle));
+    }else if(holeType==='keyway'){
+      const kw=r1*0.35,kh=r1*1.35,s=Math.asin(0.35); // cava rettangolare: lati paralleli, larghezza 2*kw
+      hole.absarc(0,0,r1,s,Math.PI*2-s,false);hole.lineTo(kh,-kw);hole.lineTo(kh,kw);
+    }
+    shape.holes.push(hole);
+  }
+  if(addLightening){
+    const hubR=Math.max(r1+2.5,baseR*0.35),rimR=baseR*0.78;
+    if(rimR-hubR>3){
+      const midR=(hubR+rimR)/2,holeR=Math.min((rimR-hubR)/2*lighteningSize,midR*0.35),n=Z>=24?5:4;
+      for(let k=0;k<n;k++){const ang=k*2*Math.PI/n,l=new THREE.Path();l.absarc(midR*Math.cos(ang),midR*Math.sin(ang),holeR,0,Math.PI*2,false);shape.holes.push(l);}
+    }
+  }
+  return shape;
+}
+
+// --- GEOMETRIA 3D ---
+function generateGear(){
+  if(currentMesh){scene.remove(currentMesh);currentMesh.geometry.dispose();}
+  const k=unitK();
+  const Z=parseInt($('num-teeth').value)||20,thk=(parseFloat($('gear-thickness').value)||10)*k;
+  let m,dOut; // mm
+  if($('calc-mode').value==='module'){
+    m=parseFloat($('gear-module').value)||2.0;dOut=m*(Z+2);
+    $('outer-diameter-val').value=(dOut/k).toFixed(1);$('outer-diameter').value=dOut/k;
+  }else{
+    dOut=(parseFloat($('outer-diameter').value)||60)*k;m=dOut/(Z+2);
+    $('gear-module-val').value=m.toFixed(2);$('gear-module').value=m;
+  }
+  const R=m*Z/2,baseR=R-1.25*m,tipR=R+m;
+  const pt=parseFloat($('tooth-tip').value)/100,th=parseFloat($('tooth-height').value)/100,tr=parseFloat($('tooth-rounding').value);
+  const holeType=$('hole-type').value,lighteningSize=parseFloat($('lightening-size').value)/100;
+  const maxHole=Math.max(1,Math.floor(baseR*1.4))/k; // limite foro, in unità mostrate
+  const hI=$('hole-diameter'),hV=$('hole-diameter-val');
+  hI.max=maxHole;hV.max=maxHole;
+  if(parseFloat(hI.value)>maxHole){hI.value=maxHole;hV.value=maxHole.toFixed(1);}
+  const r1=holeType==='none'?0:parseFloat(hI.value)*k/2;
+  const shape=createGearShape(Z,m,baseR,tipR,pt,th,tr,holeType,r1,$('add-lightening').checked,lighteningSize,$('profile-type').value);
+  const tType=$('tooth-type').value;
+  // nessun bevel: facce superiore/inferiore piatte (stampa), nessuna modifica ai fori
+  const geo=new THREE.ExtrudeGeometry(shape,{depth:thk,bevelEnabled:false,steps:tType!=='straight'?16:1,curveSegments:48});
+  if(tType!=='straight'){
+    const ang=(parseFloat($('helix-angle').value)||0)*Math.PI/180,pos=geo.attributes.position;
+    const safeR=r1*1.5,zone=baseR-safeR;
+    for(let i=0;i<pos.count;i++){
+      const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i),d=Math.sqrt(x*x+y*y);
+      if(d>safeR){
+        let tw=tType==='helical'?(z/thk)*ang:(z<thk/2?(z/(thk/2))*ang:((thk-z)/(thk/2))*ang);
+        tw*=zone>0?Math.min(1,(d-safeR)/zone):1;
+        pos.setX(i,x*Math.cos(tw)-y*Math.sin(tw));pos.setY(i,x*Math.sin(tw)+y*Math.cos(tw));
+      }
+    }
+    geo.computeVertexNormals();
+  }
+  currentMesh=new THREE.Mesh(geo,material);
+  currentMesh.rotation.x=-Math.PI/2; // solo per la vista: il pezzo resta sempre alla stessa dimensione a schermo
+  scene.add(currentMesh);
+}
+(function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);})();
+
+// --- INPUT ---
+document.querySelectorAll('input, select').forEach(el=>{
+  ['keydown','keyup','keypress','mousedown','pointerdown'].forEach(evt=>el.addEventListener(evt,e=>e.stopPropagation()));
+  el.addEventListener('input',e=>{
+    const t=e.target;
+    if(t.type==='range'){const v=$(t.id+'-val');if(v)v.value=t.value;syncUIElements();generateGear();}
+    else if(t.type==='number'&&t.value!==''&&!isNaN(parseFloat(t.value))){const r=$(t.id.replace('-val',''));if(r)r.value=t.value;syncUIElements();generateGear();}
+  });
+  el.addEventListener('change',e=>{
+    const t=e.target;if(t.id==='unit-system')return; // gestito sotto, dopo la conversione dei valori
+    if(t.type==='number'){
+      const r=$(t.id.replace('-val',''));
+      if(r){let v=parseFloat(t.value);const mn=parseFloat(r.min),mx=parseFloat(r.max);if(isNaN(v))v=parseFloat(r.value)||mn;v=Math.min(mx,Math.max(mn,v));t.value=v;r.value=v;}
+    }
+    syncUIElements();generateGear();saveState();
+  });
+});
+$('unit-system').addEventListener('change',e=>{
+  const prev=isCM;isCM=e.target.value==='cm';
+  const f=(prev&&!isCM)?10:(!prev&&isCM)?0.1:1;
+  const vals=UNIT_IDS.map(id=>parseFloat($(id).value)*f);
+  applyUnitAttrs(); // prima i limiti, poi i valori, altrimenti verrebbero troncati
+  UNIT_IDS.forEach((id,i)=>{$(id).value=vals[i].toFixed(2);$(id+'-val').value=vals[i].toFixed(2);});
+  generateGear();saveState();
+});
+
+// --- ESPORTAZIONE STL BINARIO (con normali di faccia calcolate) ---
+$('export-btn').addEventListener('click',()=>{
+  if(!currentMesh)return;
+  const g=currentMesh.geometry.clone(),u=isCM?0.1:1;g.scale(u,u,u); // coordinate del pezzo (Z = asse): sta disteso sul piatto in slicer; unità = quella scelta
+  const pos=g.attributes.position,n=pos.count/3;
+  const view=new DataView(new ArrayBuffer(84+n*50));
+  view.setUint32(80,n,true);
+  const a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3(),nrm=new THREE.Vector3();
+  let o=84;
+  for(let i=0;i<pos.count;i+=3){
+    a.fromBufferAttribute(pos,i);b.fromBufferAttribute(pos,i+1);c.fromBufferAttribute(pos,i+2);
+    nrm.subVectors(c,b).cross(a.clone().sub(b)).normalize();
+    [nrm.x,nrm.y,nrm.z,a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z].forEach(v=>{view.setFloat32(o,v,true);o+=4;});
+    view.setUint16(o,0,true);o+=2;
+  }
+  const link=document.createElement('a'),name=$('project-name').value.trim()||'Ingranaggio_3D';
+  link.href=URL.createObjectURL(new Blob([view.buffer],{type:'application/octet-stream'}));
+  link.download=name.endsWith('.stl')?name:name+'.stl';link.click();URL.revokeObjectURL(link.href);
+});
+$('undo-btn').addEventListener('click',undo);$('redo-btn').addEventListener('click',redo);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+$('toggle-btn').addEventListener('click',()=>$('sidebar').classList.toggle('collapsed'));
+applyUnitAttrs();syncUIElements();generateGear();saveState();
+</script>
+</body>
+</html>
